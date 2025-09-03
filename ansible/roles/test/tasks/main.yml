@@ -1,0 +1,176 @@
+---
+# Step 1: Remove old / broken Ansible PPA if it exists (prevents package conflicts)
+- name: Remove broken Ansible PPA (if exists)
+  apt_repository:
+    repo: 'ppa:ansible/ansible'
+    state: absent
+  become: true
+
+# Step 2: Update the apt cache so that we have the latest package index
+- name: Update apt cache
+  apt:
+    update_cache: yes
+  become: true
+
+# Step 3: Install required dependencies for Docker and file handling
+- name: Install required dependencies
+  apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - unzip
+      - gnupg
+      - lsb-release
+    state: present
+    update_cache: yes
+  become: true
+
+# Step 4: Ensure the keyrings directory exists (used for storing GPG keys)
+- name: Create keyrings directory if it does not exist
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+  become: true
+
+# Step 5: Download and dearmor Docker's GPG key (for package verification)
+- name: Add Docker GPG key (dearmored)
+  shell: |
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+    gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  args:
+    creates: /etc/apt/keyrings/docker.gpg
+  become: true
+
+# Step 6: Ensure Docker GPG key has correct permissions
+- name: Set permissions for Docker GPG key
+  file:
+    path: /etc/apt/keyrings/docker.gpg
+    mode: '0644'
+  become: true
+
+# Step 7: Add the official Docker repository
+- name: Add Docker repository
+  apt_repository:
+    repo: "deb [arch=arm64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    state: present
+    filename: docker
+  become: true
+
+# Step 8: Update apt cache again after adding Docker repo
+- name: Update apt cache after adding Docker repo
+  apt:
+    update_cache: yes
+  become: true
+
+# Step 9: Install Docker packages
+- name: Install Docker packages
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: latest
+  become: true
+
+# Step 10: Start Docker and enable it at boot
+- name: Ensure Docker service is started and enabled
+  service:
+    name: docker
+    state: started
+    enabled: true
+  become: true
+
+# Create app directory
+- name: Create app directory
+  file:
+    path: "{{ app_dir }}"
+    state: directory
+    mode: '0755'
+  become: true
+
+# Download app zip
+- name: Download the application zip from GitHub
+  get_url:
+    url: "{{ app_url }}"
+    dest: "{{ app_dir }}/app.zip"
+    mode: '0644'
+  become: true
+
+# Unarchive zip
+- name: Unarchive the downloaded zip
+  unarchive:
+    src: "{{ app_dir }}/app.zip"
+    dest: "{{ app_dir }}/"
+    remote_src: yes
+  become: true
+
+# Find extracted folder name dynamically
+- name: Find extracted folder
+  find:
+    paths: "{{ app_dir }}"
+    file_type: directory
+    patterns: "Test-app-*"
+  register: extracted_folder
+  become: true
+
+# Move files to app_dir
+- name: Move app files from extracted directory to target
+  shell: |
+    shopt -s dotglob && mv {{ extracted_folder.files[0].path }}/* {{ app_dir }}/
+  args:
+    executable: /bin/bash
+  become: true
+
+# Remove leftover extracted folder
+- name: Remove leftover folder
+  file:
+    path: "{{ extracted_folder.files[0].path }}"
+    state: absent
+  become: true
+
+# Remove zip
+- name: Remove zip archive
+  file:
+    path: "{{ app_dir }}/app.zip"
+    state: absent
+  become: true
+
+# Check docker-compose.yml
+- name: Ensure docker-compose.yml exists
+  stat:
+    path: "{{ app_dir }}/docker-compose.yml"
+  register: compose_file
+
+# Step 18: Fail if docker-compose.yml is missing
+- name: Fail if docker-compose.yml is missing
+  fail:
+    msg: "docker-compose.yml not found in the repository"
+  when: not compose_file.stat.exists
+
+# Stop existing Docker Compose app
+- name: Stop existing Docker Compose app if running
+  shell: docker compose down
+  args:
+    chdir: "{{ app_dir }}"
+  ignore_errors: yes
+
+
+# Step 20: Remove any container using port 5000 (avoid conflicts)
+- name: Remove container occupying port 5000 (if any)
+  shell: |
+    container_id=$(docker ps --filter "publish=5000" --format "{{'{{'}}.ID{{'}}'}}")
+    if [ -n "$container_id" ]; then
+      docker stop $container_id && docker rm $container_id
+    fi
+  ignore_errors: yes
+
+# Run app
+- name: Run the Flask app using Docker Compose
+  command: docker compose up -d
+  args:
+    chdir: "{{ app_dir }}"
+  become: true

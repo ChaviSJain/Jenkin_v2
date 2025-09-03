@@ -1,0 +1,6 @@
+---
+- name: Restart Flask App
+  become: true
+  shell: docker-compose down && docker-compose up -d
+  args:
+    chdir: /opt/myapp

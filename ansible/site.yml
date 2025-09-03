@@ -1,0 +1,7 @@
+
+---
+- name: Deploy Flask App on AWS
+  hosts: myvm
+  become: yes
+  roles:
+    - test
