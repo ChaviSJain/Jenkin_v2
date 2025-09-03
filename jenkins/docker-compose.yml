@@ -1,7 +1,7 @@
-version: "3.8"
 services:
   jenkins:
     build: .
+    image: jenkins/jenkins:lts-jdk17
     container_name: jenkins-lts
     ports:
       - "8080:8080"  # Jenkins UI
@@ -12,3 +12,4 @@ services:
     restart: unless-stopped
 volumes:
   jenkins_home:
+

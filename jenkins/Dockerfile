@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Ansible
-RUN pip3 install --no-cache-dir ansible==9.7.0
+RUN pip3 install --no-cache-dir ansible==9.7.0 --break-system-packages
 
 # Install AWS CLI v2
 RUN curl -sSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip \
