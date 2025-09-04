@@ -34,9 +34,6 @@ pipeline {                     // Start of Jenkins declarative pipeline
 
     stage('Lint & Validate') { // Stage 2: Run validations before infra provisioning
       steps {
-      // Inject AWS credentials for Terraform validation
-        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
-                      credentialsId: 'aws-credentials']]) {
         sh '''                 # Multi-line shell script block
           echo ">>> Running Terraform validation"
           export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
@@ -57,7 +54,6 @@ pipeline {                     // Start of Jenkins declarative pipeline
           fi
         '''
        }
-      }
    }
 
 
@@ -101,55 +97,54 @@ pipeline {                     // Start of Jenkins declarative pipeline
               fi
             '''
           }
+          // Capture EC2 IP after apply for later stages
+          script {
+            if (params.ACTION == "apply") {
+              env.EC2_IP = sh(script: "terraform -chdir=terraform output -raw public_ip", returnStdout: true).trim()
+              echo ">>> EC2 IP captured: ${env.EC2_IP}"
+            }
         }
       }
     }
 
     stage('Ansible Deploy (only on apply)') {
       when { expression { params.ACTION == 'apply' } }
-       steps {
-        withCredentials([
-          sshUserPrivateKey(
+      steps {
+        withCredentials([sshUserPrivateKey(
           credentialsId: 'SSH-PRIVATE-KEY',
-          keyFileVariable: 'SSH_KEY'
-         ),
-        [$class: 'AmazonWebServicesCredentialsBinding', 
-          credentialsId: 'aws-credentials']
-       ]) {
-        dir('ansible') {
-          sh '''
-            export SSH_KEY=$SSH_KEY
-            export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
-            export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+          keyFileVariable: 'SSH_KEY')]) {
+          dir('ansible') {
+            sh '''
+              echo ">>> Waiting for SSH to become ready..."
+              until nc -zv $EC2_IP 22; do
+                sleep 5
+                echo "Waiting for SSH..."
+              done
+              echo ">>> SSH is ready!"
 
-            EC2_IP=$(terraform -chdir=../terraform output -raw public_ip)
+              echo "[myvm]" > inventory.ini
+              echo "$EC2_IP ansible_user=${ANSIBLE_USER} ansible_ssh_private_key_file=$SSH_KEY" >> inventory.ini
 
-            echo ">>> Waiting for SSH to become ready..."
-            until nc -zv $EC2_IP 22; do
-              sleep 5
-            done
-            echo ">>> SSH is ready!"
-
-            echo "[myvm]" > inventory.ini
-            echo "$EC2_IP ansible_user=${ANSIBLE_USER} ansible_ssh_private_key_file=$SSH_KEY" >> inventory.ini
-
-            ansible-playbook -i inventory.ini site.yml
-          '''
+              ansible-playbook -i inventory.ini site.yml
+            '''
           }
         }
       }
     }
 
-    stage('Verify Deployment') { // Stage 6: Check if Flask app is working
-      when { expression { params.ACTION == 'apply' } } // Only run on apply
+
+    stage('Verify Deployment') {
+      when { expression { params.ACTION == 'apply' } }
       steps {
         sh '''
-          EC2_IP=$(terraform -chdir=terraform output -raw public_ip) # Get EC2 public IP
-          echo ">>> Checking if Flask app is up..."
-          curl -f http://$EC2_IP:5000 || (echo "Flask app not responding!" && exit 1) # Verify app
+          echo ">>> Waiting 10 seconds for Flask app to start..."
+          sleep 10
+          echo ">>> Checking if Flask app is up at $EC2_IP:5000 ..."
+          curl -f http://$EC2_IP:5000 || (echo "Flask app not responding!" && exit 1)
         '''
       }
     }
+  }
   }
 
   post {                        // Always executed at the end of pipeline
