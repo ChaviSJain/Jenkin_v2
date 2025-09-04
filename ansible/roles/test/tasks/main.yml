@@ -53,7 +53,7 @@
 # Step 7: Add the official Docker repository
 - name: Add Docker repository
   apt_repository:
-    repo: "deb [arch=arm64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
     state: present
     filename: docker
   become: true

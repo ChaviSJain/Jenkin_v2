@@ -63,43 +63,23 @@ pipeline {
     }
 
     stage('Ansible Deploy (only on apply)') {
-      when { expression { return params.ACTION == 'apply' } }
-      steps {
-        withCredentials([
-          [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials'],
-          sshUserPrivateKey(credentialsId: 'SSH-PRIVATE-KEY', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')
-        ]) {
-          script {
-            def ip = sh(script: "cd terraform && terraform output -raw public_ip", returnStdout: true).trim()
-            echo "EC2 Public IP: ${ip}"
+    when { expression { params.ACTION == 'apply' } }
+    steps {
+        withCredentials([sshUserPrivateKey(credentialsId: 'SSH-PRIVATE-KEY', keyFileVariable: 'SSH_KEY')]) {
+            dir('ansible') {
+                sh '''
+                # Get EC2 IP from Terraform output
+                EC2_IP=$(terraform -chdir=../terraform output -raw public_ip)
 
-            sh """
-              export ANSIBLE_HOST_KEY_CHECKING=False
-              export ANSIBLE_STDOUT_CALLBACK=yaml
+                echo "[myvm]" > inventory.ini
+                echo "$EC2_IP ansible_user=ubuntu ansible_ssh_private_key_file=$SSH_KEY" >> inventory.ini
 
-              # Wait for SSH to be ready
-              for i in {1..30}; do
-                nc -z -w3 ${ip} 22 && echo 'SSH reachable' && break
-                echo 'Waiting for SSH...'; sleep 5
-              done
-
-              # Install Ansible collections if needed
-              ansible-galaxy collection install community.docker || true
-
-              # Deploy using Ansible
-              ansible-playbook \
-                -i '${ip},' \
-                -u '${ANSIBLE_USER}' \
-                --private-key '${SSH_KEY}' \
-                ansible/site.yml \
-                -e app_repo_url='${ANSIBLE_APP_REPO}'
-            """
-          }
+                ansible-playbook -i inventory.ini site.yml
+                '''
+            }
         }
-      }
     }
-  }
-
+}
   post {
     always {
       archiveArtifacts artifacts: 'terraform/*.tfstate*', allowEmptyArchive: true
