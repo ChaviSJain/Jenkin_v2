@@ -18,7 +18,7 @@ pipeline {                     // Start of Jenkins declarative pipeline
     TF_IN_AUTOMATION       = 'true'  // Prevent interactive Terraform prompts
     AWS_REGION             = 'ap-south-1'  // AWS region where infra will be deployed
     TF_VAR_key_name        = 'flask-deploy-key'   // Terraform variable: EC2 key pair
-    TF_VAR_ssh_ingress_cidr= '0.0.0.0/0'          // Terraform variable: allow SSH from all IPs
+    TF_VAR_ssh_ingress_cidr = '0.0.0.0/0'          // Terraform variable: allow SSH from all IPs
     TF_VAR_project_name    = 'flask-jenkins-demo' // Terraform variable: project tag
     ANSIBLE_APP_REPO       = 'https://github.com/ChaviSJain/Test-app.git' // Flask app repo
     ANSIBLE_USER           = 'ubuntu'             // Default EC2 user for Ubuntu AMI
@@ -79,6 +79,10 @@ pipeline {                     // Start of Jenkins declarative pipeline
             }
             sh '''
               export AWS_DEFAULT_REGION='${AWS_REGION}'  # Set AWS region
+              export TF_VAR_key_name=${TF_VAR_key_name}  # Export Terraform variables
+              export TF_VAR_ssh_ingress_cidr=${TF_VAR_ssh_ingress_cidr}
+              export TF_VAR_project_name=${TF_VAR_project_name}
+
               terraform init -reconfigure -input=false   # Initialize Terraform with backend
 
               if [ "${ACTION}" = "destroy" ]; then       # If user selected destroy
