@@ -68,44 +68,39 @@ pipeline {                     // Start of Jenkins declarative pipeline
       }
     }
 
-    stage('Terraform Init + Apply/Destroy') { // Stage 4: Provision/destroy infra
+    stage('Terraform Init + Apply/Destroy') {
       environment {
-        TF_CLI_ARGS = "-input=false" // Force Terraform to run non-interactively
+        TF_CLI_ARGS = "-input=false"
       }
       steps {
-        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', // Use stored AWS creds
-                          credentialsId: 'aws-credentials']]) {
-          dir('terraform') {   // Move into terraform/ directory
-            script {
-              if (params.ACTION == "destroy") { // If destroy action requested
-                input message: "⚠️ Confirm you want to DESTROY infrastructure?", ok: "Yes, Destroy" // Ask user to confirm
-              }
+      withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']]) {
+        dir('terraform') {
+          script {
+            if (params.ACTION == "destroy") {
+              input message: "⚠️ Confirm you want to DESTROY infrastructure?", ok: "Yes, Destroy"
             }
+
             sh '''
-              export AWS_DEFAULT_REGION='${AWS_REGION}'  # Set AWS region
-              export TF_VAR_key_name=${TF_VAR_key_name}  # Export Terraform variables
+              export AWS_DEFAULT_REGION='${AWS_REGION}'
+              export TF_VAR_key_name=${TF_VAR_key_name}
               export TF_VAR_ssh_ingress_cidr=${TF_VAR_ssh_ingress_cidr}
               export TF_VAR_project_name=${TF_VAR_project_name}
 
-              terraform init -reconfigure -input=false   # Initialize Terraform with backend
+              terraform init -reconfigure -input=false
 
-              if [ "${ACTION}" = "destroy" ]; then       # If user selected destroy
-                terraform destroy -auto-approve          # Destroy infra without prompt
+              if [ "${ACTION}" = "destroy" ]; then
+                terraform destroy -auto-approve
               else
-                terraform plan -out=tf.plan              # Create Terraform execution plan
-                terraform apply -auto-approve tf.plan    # Apply the plan automatically
+                terraform plan -out=tf.plan
+                terraform apply -auto-approve tf.plan
               fi
             '''
-          }
-          // Capture EC2 IP after apply for later stages
-          script {
-            if (params.ACTION == "apply") {
-              env.EC2_IP = sh(script: "terraform -chdir=terraform output -raw public_ip", returnStdout: true).trim()
-              echo ">>> EC2 IP captured: ${env.EC2_IP}"
-            }
-        }
-      }
-    }
+           }
+         }
+       }
+     }
+   }
+
 
     stage('Ansible Deploy (only on apply)') {
       when { expression { params.ACTION == 'apply' } }
