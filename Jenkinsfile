@@ -99,29 +99,35 @@ pipeline {
         }
       }
     }
-
+ 
     stage('Validate EC2 Instance') {
       when { expression { params.ACTION == 'apply' } }
       steps {
-        dir('terraform') {
-          sh '''
-            EC2_IP=$(terraform output -raw public_ip)
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                      credentialsId: 'aws-credentials']]) {
+          dir('terraform') {
+            sh '''
+              export AWS_DEFAULT_REGION=${AWS_REGION}
+              EC2_IP=$(terraform output -raw public_ip)
 
-            echo "Checking if EC2 instance $EC2_IP is up..."
-            if nc -zv $EC2_IP 22; then
-              echo "✅ EC2 is reachable via SSH"
-            else
-              echo "❌ EC2 is not reachable!"
-            exit 1
-            fi
-         '''
+              echo "Checking if EC2 instance $EC2_IP is up..."
+              if nc -zv $EC2_IP 22; then
+                echo "✅ EC2 is reachable via SSH"
+              else
+                echo "❌ EC2 is not reachable!"
+              exit 1
+              fi
+           '''
+          }
         }
       }
-    }
+   }
 
     stage('Validate Flask App') {
       when { expression { params.ACTION == 'apply' } }
       steps {
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                      credentialsId: 'aws-credentials']]) {
         dir('terraform') {
           sh '''
             EC2_IP=$(terraform output -raw public_ip)
@@ -140,6 +146,7 @@ pipeline {
       }
     }
 
+
   } // end stages
 
   post {
@@ -147,4 +154,5 @@ pipeline {
       archiveArtifacts artifacts: 'terraform/*.tfstate*', allowEmptyArchive: true  // Save Terraform state files as Jenkins artifacts, even if no files found
     }
   }
+}
 }
