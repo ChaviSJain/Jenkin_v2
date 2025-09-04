@@ -17,7 +17,7 @@ pipeline {
   // Define environment variables available globally across all stages
   environment {
     TF_IN_AUTOMATION       = 'true'                     // Tell Terraform it is running in automated mode (non-interactive)
-    AWS_REGION             = 'ap-south-1'               // AWS region to create EC2 instances, S3 buckets.
+    AWS_REGION             = 'ap-south-1'               
     TF_VAR_key_name        = 'flask-deploy-key'         // Terraform variable for existing EC2 key pair
     TF_VAR_ssh_ingress_cidr= '0.0.0.0/0'               // Terraform variable for security group (allow SSH from anywhere; should tighten in production)
     TF_VAR_project_name    = 'flask-jenkins-demo'       // Terraform variable for project name, used in resource naming
