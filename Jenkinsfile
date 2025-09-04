@@ -145,8 +145,7 @@ pipeline {
         }
       }
     }
-
-
+    }
   } // end stages
 
   post {
@@ -154,5 +153,4 @@ pipeline {
       archiveArtifacts artifacts: 'terraform/*.tfstate*', allowEmptyArchive: true  // Save Terraform state files as Jenkins artifacts, even if no files found
     }
   }
-}
 }
