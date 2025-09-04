@@ -67,7 +67,7 @@ pipeline {
       steps {
         withCredentials([
           [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials'],
-          sshUserPrivateKey(credentialsId: 'ec2-ssh', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')
+          sshUserPrivateKey(credentialsId: 'SSH-PRIVATE-KEY', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')
         ]) {
           script {
             def ip = sh(script: "cd terraform && terraform output -raw public_ip", returnStdout: true).trim()
