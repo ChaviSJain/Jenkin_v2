@@ -65,23 +65,33 @@ pipeline {
     }
 
     stage('Ansible Deploy (only on apply)') {
-      when { expression { params.ACTION == 'apply' } }
-      steps {
-        withCredentials([sshUserPrivateKey(credentialsId: 'SSH-PRIVATE-KEY', keyFileVariable: 'SSH_KEY')]) {
-          dir('ansible') {
-            sh '''
-              # Get EC2 IP from Terraform output
-              EC2_IP=$(terraform -chdir=../terraform output -raw public_ip)
+  when { expression { params.ACTION == 'apply' } }
+  steps {
+    withCredentials([
+      sshUserPrivateKey(credentialsId: 'SSH-PRIVATE-KEY', keyFileVariable: 'SSH_KEY'),
+      [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']
+    ]) {
+      dir('ansible') {
+        sh '''#!/bin/bash
+          # Get EC2 IP from Terraform output
+          EC2_IP=$(terraform -chdir=../terraform output -raw public_ip)
 
-              echo "[myvm]" > inventory.ini
-              echo "$EC2_IP ansible_user=${ANSIBLE_USER} ansible_ssh_private_key_file=$SSH_KEY" >> inventory.ini
+          echo "[myvm]" > inventory.ini
+          echo "$EC2_IP ansible_user=${ANSIBLE_USER} ansible_ssh_private_key_file=$SSH_KEY" >> inventory.ini
 
-              ansible-playbook -i inventory.ini site.yml
-            '''
-          }
-        }
+          # Wait for SSH
+          until nc -zv $EC2_IP 22; do
+            echo "Waiting for SSH..."
+            sleep 5
+          done
+
+          ansible-playbook -i inventory.ini site.yml
+        '''
       }
     }
+  }
+}
+
   }
 
   post {
