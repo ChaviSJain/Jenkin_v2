@@ -8,10 +8,10 @@ pipeline {
   parameters {
     choice(name: 'ACTION', choices: ['apply','destroy'], description: 'Terraform action')
     string(name: 'AWS_REGION', defaultValue: 'ap-south-1', description: 'AWS region')
-    string(name: 'TF_VAR_key_name', defaultValue: 'your-existing-keypair', description: 'Existing EC2 key pair name')
+    string(name: 'TF_VAR_key_name', defaultValue: 'flask-deploy-key', description: 'Existing EC2 key pair name')
     string(name: 'TF_VAR_ssh_ingress_cidr', defaultValue: '0.0.0.0/0', description: 'CIDR for SSH (tighten for security)')
     string(name: 'TF_VAR_project_name', defaultValue: 'flask-jenkins-demo', description: 'Project tag')
-    string(name: 'ANSIBLE_APP_REPO', defaultValue: 'https://github.com/your-user/your-flask-repo.git', description: 'Flask repo URL')
+    string(name: 'ANSIBLE_APP_REPO', defaultValue: 'https://github.com/ChaviSJain/Test-app.git', description: 'Flask repo URL')
     string(name: 'ANSIBLE_USER', defaultValue: 'ubuntu', description: 'SSH user for the AMI')
   }
 
