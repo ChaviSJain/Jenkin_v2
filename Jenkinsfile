@@ -100,6 +100,46 @@ pipeline {
       }
     }
 
+    stage('Validate EC2 Instance') {
+      when { expression { params.ACTION == 'apply' } }
+      steps {
+        dir('terraform') {
+          sh '''
+            EC2_IP=$(terraform output -raw public_ip)
+
+            echo "Checking if EC2 instance $EC2_IP is up..."
+            if nc -zv $EC2_IP 22; then
+              echo "✅ EC2 is reachable via SSH"
+            else
+              echo "❌ EC2 is not reachable!"
+            exit 1
+            fi
+         '''
+        }
+      }
+    }
+
+    stage('Validate Flask App') {
+      when { expression { params.ACTION == 'apply' } }
+      steps {
+        dir('terraform') {
+          sh '''
+            EC2_IP=$(terraform output -raw public_ip)
+
+            echo "Checking if Flask app is running on $EC2_IP:5000..."
+            STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://$EC2_IP:5000/)
+
+            if [ "$STATUS_CODE" -eq 200 ]; then
+              echo "✅ Flask app is running successfully!"
+            else
+              echo "❌ Flask app is not responding! Status code: $STATUS_CODE"
+            exit 1
+            fi
+          '''
+        }
+      }
+    }
+
   } // end stages
 
   post {
