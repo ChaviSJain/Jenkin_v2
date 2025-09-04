@@ -34,8 +34,14 @@ pipeline {                     // Start of Jenkins declarative pipeline
 
     stage('Lint & Validate') { // Stage 2: Run validations before infra provisioning
       steps {
+      // Inject AWS credentials for Terraform validation
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                      credentialsId: 'aws-credentials']]) {
         sh '''                 # Multi-line shell script block
           echo ">>> Running Terraform validation"
+          export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+          export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+          export AWS_DEFAULT_REGION='${AWS_REGION}'
           terraform -chdir=terraform init -backend=false   # Init Terraform (no backend)
           terraform -chdir=terraform validate              # Validate Terraform configs
 
@@ -50,8 +56,10 @@ pipeline {                     // Start of Jenkins declarative pipeline
             command -v flake8 && flake8 flaskapp || echo "flake8 not installed" # Lint Python
           fi
         '''
+       }
       }
-    }
+   }
+
 
     stage('Show Tool Versions') { // Stage 3: Print tool versions (debugging)
       steps {
