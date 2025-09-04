@@ -25,47 +25,72 @@ pipeline {
             steps {
                 sh '''
                   echo "===== Versions ====="
-                  terraform -version || echo "Terraform not installed"
-                  ansible --version || echo "Ansible not installed"
-                  aws --version || echo "AWS CLI not installed"
+                  terraform -version
+                  ansible --version
+                  aws --version
                   echo "===================="
                 '''
             }
         }
 
-        stage('Terraform Action') {
+        stage('Terraform Apply/Destroy') {
+            environment {
+                TF_CLI_ARGS = "-input=false"
+            }
             steps {
-                script {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-access-key-id'
+                ]]) {
                     dir('terraform') {
-                        if (params.ACTION == "destroy") {
-                            sh 'echo "Running: terraform destroy (stub)"'
-                            // replace with: terraform destroy -auto-approve
-                        } else {
-                            sh 'echo "Running: terraform init/plan/apply (stub)"'
-                            // replace with:
-                            // terraform init
-                            // terraform plan -out=tf.plan
-                            // terraform apply -auto-approve tf.plan
-                        }
+                        sh '''
+                          export AWS_DEFAULT_REGION="${AWS_REGION}"
+                          terraform init
+                          if [ "${ACTION}" = "destroy" ]; then
+                            terraform destroy -auto-approve
+                          else
+                            terraform plan -out=tf.plan
+                            terraform apply -auto-approve tf.plan
+                          fi
+                        '''
                     }
                 }
             }
         }
 
-        stage('Ansible Deploy (Stub)') {
+        stage('Ansible Deploy (only on apply)') {
             when { expression { return params.ACTION == 'apply' } }
             steps {
-                sh '''
-                  echo "Would run ansible-playbook here..."
-                  echo "Simulating Ansible deployment"
-                '''
+                withCredentials([
+                    sshUserPrivateKey(credentialsId: 'SSH-PRIVATE-KEY', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')
+                ]) {
+                    script {
+                        def ip = sh(script: "cd terraform && terraform output -raw public_ip", returnStdout: true).trim()
+                        echo "EC2 Public IP: ${ip}"
+
+                        sh """
+                          export ANSIBLE_HOST_KEY_CHECKING=False
+                          echo "Waiting for SSH on ${ip}..."
+                          for i in {1..30}; do
+                            nc -z -w3 ${ip} 22 && echo 'SSH ready' && break
+                            echo 'Still waiting for SSH...'; sleep 5
+                          done
+
+                          ansible-playbook \
+                            -i '${ip},' \
+                            -u '${SSH_USER}' \
+                            --private-key '${SSH_KEY}' \
+                            ansible/site.yml
+                        """
+                    }
+                }
             }
         }
     }
 
     post {
         always {
-            echo "Pipeline finished. (You can add archiving later)"
+            archiveArtifacts artifacts: 'terraform/*.tfstate*', allowEmptyArchive: true
         }
     }
 }
