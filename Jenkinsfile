@@ -105,21 +105,36 @@ pipeline {                     // Start of Jenkins declarative pipeline
       }
     }
 
-    stage('Ansible Deploy (only on apply)') { // Stage 5: Configure EC2 with Ansible
-      when { expression { params.ACTION == 'apply' } } // Only run if ACTION=apply
-      steps {
-        withCredentials([sshUserPrivateKey(              // Inject SSH private key
-          credentialsId: 'SSH-PRIVATE-KEY',              // ID of stored key in Jenkins
-          keyFileVariable: 'SSH_KEY')]) {                // Save key in variable $SSH_KEY
-          dir('ansible') {  // Move into ansible/ directory
-            sh '''
-              EC2_IP=$(terraform -chdir=../terraform output -raw public_ip) # Get EC2 public IP
+    stage('Ansible Deploy (only on apply)') {
+      when { expression { params.ACTION == 'apply' } }
+       steps {
+        withCredentials([
+          sshUserPrivateKey(
+          credentialsId: 'SSH-PRIVATE-KEY',
+          keyFileVariable: 'SSH_KEY'
+         ),
+        [$class: 'AmazonWebServicesCredentialsBinding', 
+          credentialsId: 'aws-credentials']
+       ]) {
+        dir('ansible') {
+          sh '''
+            export SSH_KEY=$SSH_KEY
+            export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+            export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
 
-              echo "[myvm]" > inventory.ini                                  # Create inventory file
-              echo "$EC2_IP ansible_user=${ANSIBLE_USER} ansible_ssh_private_key_file=$SSH_KEY" >> inventory.ini
+            EC2_IP=$(terraform -chdir=../terraform output -raw public_ip)
 
-              ansible-playbook -i inventory.ini site.yml                     # Run Ansible playbook
-            '''
+            echo ">>> Waiting for SSH to become ready..."
+            until nc -zv $EC2_IP 22; do
+              sleep 5
+            done
+            echo ">>> SSH is ready!"
+
+            echo "[myvm]" > inventory.ini
+            echo "$EC2_IP ansible_user=${ANSIBLE_USER} ansible_ssh_private_key_file=$SSH_KEY" >> inventory.ini
+
+            ansible-playbook -i inventory.ini site.yml
+          '''
           }
         }
       }
