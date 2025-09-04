@@ -65,7 +65,10 @@ pipeline {
     stage('Ansible Deploy (only on apply)') {
       when { expression { params.ACTION == 'apply' } }
       steps {
-        withCredentials([sshUserPrivateKey(credentialsId: 'SSH-PRIVATE-KEY', keyFileVariable: 'SSH_KEY')]) {
+        withCredentials([
+           [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials'],
+           sshUserPrivateKey(credentialsId: 'SSH-PRIVATE-KEY', keyFileVariable: 'SSH_KEY')
+        ]) {
           dir('ansible') {
             sh '''
               # Get EC2 IP from Terraform output
@@ -75,11 +78,12 @@ pipeline {
               echo "$EC2_IP ansible_user=ubuntu ansible_ssh_private_key_file=$SSH_KEY" >> inventory.ini
 
               ansible-playbook -i inventory.ini site.yml
-            '''
-          }
+           '''
         }
-      }
+      } 
     }
+   }
+
   }
 
   post {
