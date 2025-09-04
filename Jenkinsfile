@@ -63,27 +63,28 @@ pipeline {
     }
 
     stage('Ansible Deploy (only on apply)') {
-    when { expression { params.ACTION == 'apply' } }
-    steps {
+      when { expression { params.ACTION == 'apply' } }
+      steps {
         withCredentials([sshUserPrivateKey(credentialsId: 'SSH-PRIVATE-KEY', keyFileVariable: 'SSH_KEY')]) {
-            dir('ansible') {
-                sh '''
-                # Get EC2 IP from Terraform output
-                EC2_IP=$(terraform -chdir=../terraform output -raw public_ip)
+          dir('ansible') {
+            sh '''
+              # Get EC2 IP from Terraform output
+              EC2_IP=$(terraform -chdir=../terraform output -raw public_ip)
 
-                echo "[myvm]" > inventory.ini
-                echo "$EC2_IP ansible_user=ubuntu ansible_ssh_private_key_file=$SSH_KEY" >> inventory.ini
+              echo "[myvm]" > inventory.ini
+              echo "$EC2_IP ansible_user=ubuntu ansible_ssh_private_key_file=$SSH_KEY" >> inventory.ini
 
-                ansible-playbook -i inventory.ini site.yml
-                '''
-            }
+              ansible-playbook -i inventory.ini site.yml
+            '''
+          }
         }
+      }
     }
-}
+  }
+
   post {
     always {
       archiveArtifacts artifacts: 'terraform/*.tfstate*', allowEmptyArchive: true
     }
   }
-}
 }
