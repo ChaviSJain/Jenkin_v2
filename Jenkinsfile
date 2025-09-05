@@ -107,10 +107,14 @@ pipeline {
                       credentialsId: 'aws-credentials']]) {
           dir('terraform') {
             sh '''
-              export AWS_DEFAULT_REGION=${AWS_REGION}
+              export AWS_DEFAULT_REGION=${AWS_REGION} 
+
+              # Get EC2 public IP from Terraform output        
               EC2_IP=$(terraform output -raw public_ip)
 
               echo "Checking if EC2 instance $EC2_IP is up..."
+              # Try to open a TCP connection (-z) with verbose output (-v) on port 22 (SSH)
+              
               if nc -zv $EC2_IP 22; then
                 echo "✅ EC2 is reachable via SSH"
               else
@@ -133,7 +137,11 @@ pipeline {
             EC2_IP=$(terraform output -raw public_ip)
 
             echo "Checking if Flask app is running on $EC2_IP:5000..."
+
             STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://$EC2_IP:5000/)
+            # Perform HTTP request to Flask app (port 5000)
+            # -s: silent, -o /dev/null: discard output, -w: print only HTTP status code
+
 
             if [ "$STATUS_CODE" -eq 200 ]; then
               echo "✅ Flask app is running successfully!"
